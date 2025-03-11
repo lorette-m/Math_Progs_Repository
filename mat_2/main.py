@@ -1,7 +1,11 @@
 import numpy as np
 from scipy.linalg import lu_factor, lu_solve
+import matplotlib.pyplot as plt
 
-p_values = [1.0, 0.1, 0.01, 0.0001, 0.000001]
+p_values = [
+    1.0, 0.1, 0.01, 0.0001, 0.000001,
+    0.0000001, 0.00000001, 0.000000001, 0.0000000001
+]
 
 A_elements = np.array([
     [31, -7, -7, -4, -8, -4, -1, 0],
@@ -18,62 +22,82 @@ b_elements = np.array([-29, -28, -104, 198, 29, 59, -71, -54], dtype=float)
 
 results = []
 
-for idx, p in enumerate(p_values):
+for p in p_values:
     A = A_elements.copy()
     A[0, 0] += p
 
     b = b_elements.copy()
     b[0] += 3 * p
 
+    # LU-декомпозиция
     lu, piv = lu_factor(A)
-    lu_solution = lu_solve((lu, piv), b)
+    x2 = lu_solve((lu, piv), b)
 
-    # обратная матрица
+    # Вычисление обратной матрицы
     n = A.shape[0]
     I = np.eye(n)
     A_inv = np.zeros_like(A)
     for i in range(n):
         A_inv[:, i] = lu_solve((lu, piv), I[:, i])
 
-    # x1 = A^-1 * b
     x1 = A_inv @ b
 
+    # Число обусловленности и погрешность
     cond_A = np.linalg.cond(A, p=np.inf)
+    delta = np.linalg.norm(x1 - x2) / np.linalg.norm(x1)
 
-    # δ = ||x1 - x2|| / ||x1||
-    delta = np.linalg.norm(x1 - lu_solution) / np.linalg.norm(x1)
+    results.append((p, cond_A, delta, x1, x2))
 
-    diff = x1 - lu_solution
+# Формируем данные для таблицы
+table_data = []
+for p, cond, delta, x1, x2 in results:
+    x1_str = np.array2string(x1, precision=3, suppress_small=True, threshold=4)
+    x2_str = np.array2string(x2, precision=3, suppress_small=True, threshold=4)
+    table_data.append([
+        f"{p:.10f}",
+        f"{cond:.6e}",
+        f"{delta:.6e}",
+        x1_str,
+        x2_str
+    ])
 
-    results.append((p, cond_A, delta, x1, lu_solution, diff))
+# Заголовки таблицы
+headers = ["Параметр p", "Число обусловленности (cond)", "Погрешность δ", "Вектор x1", "Вектор x2"]
 
-# Консольный вывод
-for idx, (p, cond, delta, x1, lu_solution, diff) in enumerate(results):
-    print(f"\n=== Результаты для p = {p:.6f} ===")
-    print(f"Число обусловленности (cond): {cond:.6e}")
-    print(f"Относительная погрешность (δ): {delta:.6e}")
+# Создаем изображение таблицы
+fig, ax = plt.subplots(figsize=(12, 8))
+ax.axis('off')
 
-    # Форматированный вывод векторов
-    print("\nВектор x1 (A⁻¹b):")
-    print(np.array2string(x1, precision=6, suppress_small=True, floatmode='fixed'))
+# Создаем таблицу
+table = ax.table(
+    cellText=table_data,
+    colLabels=headers,
+    loc='center',
+    cellLoc='center',
+    colColours=['#f3f3f3'] * len(headers)  # Цвет фона заголовков
+)
 
-    print("\nВектор x2 (LU-решение):")
-    print(np.array2string(lu_solution, precision=6, suppress_small=True, floatmode='fixed'))
+# Настройка стиля таблицы
+table.auto_set_font_size(False)
+table.set_fontsize(10)
+table.scale(1.2, 1.2)  # Масштабирование таблицы
 
-    print("\n" + "=" * 50)
+# Сохраняем таблицу как изображение
+plt.savefig("table_output.png", bbox_inches='tight', dpi=300)
+plt.show()
 
-# График зависимости δ от cond
-import matplotlib.pyplot as plt
-
+# Построение графика
 conds = [res[1] for res in results]
 deltas = [res[2] for res in results]
 
-plt.figure(figsize=(10, 6))
-plt.plot(conds, deltas, 'bo-')
+plt.figure(figsize=(12, 7))
+plt.plot(conds, deltas, 'bo-', markersize=8)
 plt.xscale('log')
 plt.yscale('log')
-plt.xlabel('Число обусловленности (cond)')
-plt.ylabel('Относительная погрешность (δ)')
-plt.title('Зависимость δ от cond')
-plt.grid(True)
+plt.xlabel('Число обусловленности (cond)', fontsize=12)
+plt.ylabel('Относительная погрешность (δ)', fontsize=12)
+plt.title('Зависимость δ от cond', fontsize=14)
+plt.grid(True, which="both", linestyle='--', alpha=0.6)
+plt.tight_layout()
+plt.savefig("plot_output.png", bbox_inches='tight', dpi=300)
 plt.show()
